@@ -191,9 +191,10 @@ html[data-mode="live"] .wname::before{background-image:url("data:image/svg+xml,%
 .dl{position:relative;width:calc(min(60vmin,420px) * var(--dlw,1.4286))}
 #dslogo{width:100%!important}
 #dl-rombo{visibility:hidden}.dl-close #dl-rombo{visibility:visible}.dl-close .dl-track{display:none}
-.dl-track{position:absolute;left:47.95%;top:63.53%;width:37%;height:0}
-.dl-move{position:absolute;left:0;top:0;width:100%;height:0;animation:dlgo 14s cubic-bezier(.12,.62,.3,1) forwards;will-change:transform}
-.dl-r{position:absolute;left:0;top:0;width:13.92%;aspect-ratio:1;background:var(--damasco);transform:translate(-50%,-50%) rotate(45deg)}
+.dl-track{position:absolute;left:47.95%;top:43.53%;width:37%;height:40%;pointer-events:none}
+.dl-move{position:absolute;left:0;top:0;width:100%;height:100%;animation:dlgo 14s cubic-bezier(.25,.45,.55,.95) forwards;will-change:transform}
+.introtxt .dl-r{display:block;width:13.92%;height:auto;aspect-ratio:1;margin:0;border-radius:0;overflow:visible;background:var(--damasco)}
+.dl-r{position:absolute;left:0;top:50%;width:13.92%;aspect-ratio:1;background:var(--damasco);transform:translate(-50%,-50%) rotate(45deg)}
 @keyframes dlgo{from{transform:translateX(0)}to{transform:translateX(94%)}}
 @media (prefers-reduced-motion:reduce){.dl-move{animation:none}}
 </style>
@@ -239,5 +240,5 @@ html[data-mode="live"] .wname::before{background-image:url("data:image/svg+xml,%
   </div>
   <div id="viewnote" hidden>Vista real, fotografiada desde la obra.</div>
 </div>
-<script>(function(){var V="53",go=false;window.D2_V=V;window.D2_LOAD=function(){if(go)return;go=true;["data.js","models.js","env.js","app.js"].forEach(function(f){var e=document.createElement("script");e.src=f+"?v="+V;e.async=false;e.onload=function(){window.D2_PROG&&window.D2_PROG({"data.js":.1,"models.js":.5,"app.js":.58}[f]);};document.body.appendChild(e);});};if(!document.getElementById("intro")||window.D2_VIDEO_FULL)window.D2_LOAD();setTimeout(window.D2_LOAD,8000);})();</script>
+<script>(function(){var V="60",go=false;window.D2_V=V;window.D2_LOAD=function(){if(go)return;go=true;["data.js","hub.js","models.js","env.js","app.js"].forEach(function(f){var e=document.createElement("script");e.src=f+"?v="+V;e.async=false;e.onload=function(){window.D2_PROG&&window.D2_PROG({"data.js":.1,"models.js":.5,"app.js":.58}[f]);};document.body.appendChild(e);});};if(!document.getElementById("intro")||window.D2_VIDEO_FULL)window.D2_LOAD();setTimeout(window.D2_LOAD,8000);})();</script>
 </html>
