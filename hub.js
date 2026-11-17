@@ -5,7 +5,10 @@
   'use strict';
   var CFG = window.HUB_CFG || {}, LIVE = !!(CFG.url && CFG.key);
   var UNITS = []; for (var f = 1; f <= 4; f++) for (var k = 1; k <= 13; k++) UNITS.push(f * 100 + k);
-  var ST = { disponible: 'Disponible', reservada: 'Reservada', vendida: 'Vendida' };
+  var ST = { disponible: 'Disponible', reservada: 'Reservada', vendida: 'Vendida', bloqueada: 'No disponible' };
+  // Embebido en la web de Greenville (?embed=greenville, o dentro de un iframe en GitHub Pages): los datos y los formularios
+  // son de la web padre. El visor no guarda nada: recibe estados y precios por postMessage y avisa cuando piden reservar o consultar.
+  var EMBED = /[?&]embed=greenville\b/.test(location.search) || (window.parent !== window && /github\.io$/.test(location.hostname));
   var $ = function (id) { return document.getElementById(id); };
   function h(tag, at, kids) {
     var e = document.createElement(tag); at = at || {};
@@ -93,7 +96,18 @@
       setSettings: function (p) { var b = { id: 1 }; if ('showCount' in p) b.show_count = p.showCount; if ('whatsapp' in p) b.whatsapp = p.whatsapp; return rq('/rest/v1/settings?on_conflict=id', { method: 'POST', prefer: 'resolution=merge-duplicates', body: b }); }
     };
   })();
-  var S = LIVE ? Live : Demo;
+  var Embed = (function () {
+    var st = {}, pr = {};
+    return {
+      needsSetup: function () { return false; },
+      load: function () { var u = {}; UNITS.forEach(function (n) { u[n] = { price: pr[n] || null, status: st[n] || 'disponible', count: null }; }); return Promise.resolve({ units: u, settings: { showCount: false, whatsapp: '' } }); },
+      setStatuses: function (m) { st = {}; for (var k in m) if (ST[m[k]] && m[k] !== 'disponible') st[+k] = m[k]; },
+      setPrices: function (m) { pr = {}; for (var k in m) { var v = +m[k]; if (v > 0) pr[+k] = v; } },
+      inquire: function () { return Promise.resolve(); }, track: function () { return Promise.resolve(); },
+      isAdmin: function () { return false; }, login: function () { return Promise.reject(new Error('No disponible.')); }, logout: function () { return Promise.resolve(); }
+    };
+  })();
+  var S = EMBED ? Embed : LIVE ? Live : Demo;
 
   // ---------------------------------------------------------------- estilos
   var css = '\
@@ -103,9 +117,9 @@
 .hub-price b{display:block;margin-top:2px;font:700 20px var(--display);font-variant-numeric:tabular-nums;color:var(--ptx)}\
 .hub-price b.ask{font:600 14px var(--body);color:var(--pmut)}\
 .hub-st{flex:0 0 auto;font:700 12px var(--body);padding:6px 10px;border-radius:999px;background:#dff3e4;color:#17603a}\
-.hub-st.reservada{background:#fde9c8;color:#8a5200}.hub-st.vendida{background:#e6e6ea;color:#55555e}\
+.hub-st.reservada{background:#fde9c8;color:#8a5200}.hub-st.vendida,.hub-st.bloqueada{background:#e6e6ea;color:#55555e}\
 .hub-count{font-size:12.5px;color:var(--pmut)}@media (max-width:760px){.hub-price{padding:7px 12px}.hub-price b{font-size:17px}}\
-.hub-ask{width:100%}\
+.hub-ask{width:100%}.hub-acts2{display:flex;gap:8px;width:100%}.hub-acts2 .act{flex:1 1 0;min-width:0}.hub-acts2 .act:disabled{opacity:.45;cursor:default}\
 .u.hub-off{opacity:.55}.u.hub-off::after{display:block;font:600 9px var(--body);margin-top:1px;content:attr(data-st)}\
 .tag.hub-off{opacity:.8}.tag.hub-off::after{content:" · " attr(data-st);font-weight:500}\
 #hub-modal,#hub-admin{position:fixed;inset:0;z-index:40;font-family:var(--body);color:#1d1c24;color-scheme:light}\
@@ -149,12 +163,36 @@
   function refresh() { return S.load().then(function (d) { pub = d; paint(); }).catch(function () { }); }
   function track(t, u) { if (!S.isAdmin()) S.track(t, u); }
 
-  var cardEl, askEl, stampKey = '';
+  var cardEl, askEl, resEl, stampKey = '';
+  // ---------------------------------------------------------------- mensajes con la web padre (contrato v1)
+  function payload(n) {
+    n = +n; var a = (window.UNIT_AREAS || {})[n] || [0, 0, 0], pos = n % 100, d = window.__d2 && window.__d2.state;
+    var mode = d && d.deco && d.deco !== 'none' ? d.deco : 'ofi';
+    return { id: String(n), number: n, floor: Math.floor(n / 100), position: pos, view: pos <= 6 ? 'greenville' : 'abril', corner: [1, 6, 7, 13].indexOf(pos) >= 0,
+      areas: { covered: +a[0] || 0, semicovered: +a[1] || 0, total: +a[2] || 0 }, mode: mode };
+  }
+  function emit(type, extra) {
+    if (!EMBED || window.parent === window) return;
+    var m = { source: 'downtown-studios', v: 1, type: type }; for (var k in extra || {}) m[k] = extra[k];
+    try { window.parent.postMessage(m, '*'); } catch (e) { }           // datos públicos de la unidad: nada sensible viaja en estos mensajes
+  }
+  if (EMBED) window.addEventListener('message', function (e) {
+    if (e.source !== window.parent) return;                              // solo la ventana que nos embebe
+    var m = e.data; if (!m || m.source !== 'greenville' || m.v !== 1) return;
+    if (m.type === 'SET_UNIT_STATUSES' && m.statuses && typeof m.statuses === 'object') { Embed.setStatuses(m.statuses); refresh(); }
+    else if (m.type === 'SET_UNIT_PRICES' && m.prices && typeof m.prices === 'object') { Embed.setPrices(m.prices); refresh(); }
+    else if (m.type === 'SELECT_UNIT' && window.__d2 && UNITS.indexOf(+m.number) >= 0) window.__d2.selectUnit(+m.number);
+  });
   function ensure() {
     if (cardEl || !$('card')) return;
     cardEl = h('div', { id: 'hub-card' }); askEl = h('button', { type: 'button', class: 'act hub-ask', text: 'Consultar por esta unidad', onclick: function () { if (cur) openAsk(cur); } });
     var ar = $('areas'); ar.parentNode.insertBefore(cardEl, ar.nextSibling);
-    var acts = document.querySelector('#card .acts'); acts.parentNode.insertBefore(askEl, acts.nextSibling);
+    var acts = document.querySelector('#card .acts');
+    if (EMBED) {
+      resEl = h('button', { type: 'button', class: 'act', text: 'Reservar unidad', onclick: function () { if (cur) emit('REQUEST_RESERVATION', { unit: payload(cur) }); } });
+      askEl = h('button', { type: 'button', class: 'act alt', text: 'Consultar', onclick: function () { if (cur) emit('REQUEST_INQUIRY', { unit: payload(cur) }); } });
+      acts.parentNode.insertBefore(h('div', { class: 'hub-acts2' }, [resEl, askEl]), acts.nextSibling);
+    } else acts.parentNode.insertBefore(askEl, acts.nextSibling);
   }
   function mark(el) { var u = pub.units[+el.textContent.trim().slice(0, 3)] || pub.units[+el.dataset.num]; var off = u && u.status !== 'disponible'; el.classList.toggle('hub-off', !!off); if (off) el.dataset.st = ST[u.status].toLowerCase(); else delete el.dataset.st; }
   function paint() {
@@ -165,9 +203,14 @@
     var u = pub.units[cur] || { status: 'disponible' }; cardEl.textContent = '';
     cardEl.appendChild(h('div', { class: 'hub-price' }, [h('div', {}, [h('small', { text: 'Precio' }), u.price ? h('b', { text: money(u.price) }) : h('b', { class: 'ask', text: 'Consultar precio' })]), h('span', { class: 'hub-st ' + u.status, text: ST[u.status] })]));
     if (u.count) cardEl.appendChild(h('div', { class: 'hub-count', text: u.count === 1 ? '1 persona consultó por esta unidad' : u.count + ' personas consultaron por esta unidad' }));
-    askEl.textContent = u.status === 'disponible' ? 'Consultar por esta unidad' : 'Consultar igual';
+    if (EMBED) { resEl.disabled = u.status !== 'disponible'; resEl.title = resEl.disabled ? ST[u.status] : ''; }
+    else askEl.textContent = u.status === 'disponible' ? 'Consultar por esta unidad' : 'Consultar igual';
   }
   function render(state) {
+    if (EMBED) {
+      if ((state.unit || 0) !== last.unit) emit(state.unit ? 'UNIT_SELECTED' : 'UNIT_CLEARED', state.unit ? { unit: payload(state.unit) } : {});
+      if (state.mode !== last.mode) emit('VIEW_MODE', { unit: state.unit ? payload(state.unit) : null, mode: state.mode });
+    }
     cur = state.unit || null;
     if (cur && cur !== last.unit) track('unit', cur);
     if (state.mode !== last.mode && (state.mode === 'walk' || state.mode === 'view')) track(state.mode, cur);
@@ -219,7 +262,7 @@
 
   // ---------------------------------------------------------------- panel del equipo
   var adm = null, tab = 'unidades', D = null;
-  function openAdmin() { if ($('hub-admin')) return; adm = h('div', { id: 'hub-admin' }); document.body.appendChild(adm); S.isAdmin() ? loadAdmin() : loginView(); }
+  function openAdmin() { if (EMBED || $('hub-admin')) return; adm = h('div', { id: 'hub-admin' }); document.body.appendChild(adm); S.isAdmin() ? loadAdmin() : loginView(); }
   function closeAdmin() { if (adm) adm.remove(); adm = null; if (location.hash === '#equipo') { try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { } } refresh(); }
   function loginView() {
     var setup = S.needsSetup(), em = LIVE ? field('Mail', { type: 'email', autocomplete: 'username', required: true }) : null, pw = field(setup ? 'Elegí una clave (mínimo 6 caracteres)' : 'Clave', { type: 'password', autocomplete: setup ? 'new-password' : 'current-password', required: true }),
@@ -328,6 +371,9 @@
   var taps = [];
   document.addEventListener('click', function (e) { if (!e.target.closest || !e.target.closest('.brand .logos')) return; var t = Date.now(); taps = taps.filter(function (x) { return t - x < 2500; }); taps.push(t); if (taps.length >= 5) { taps = []; openAdmin(); } });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeModal(); });
-  window.HUB = { render: render, refresh: refresh, openAdmin: openAdmin, live: LIVE };
-  track('visit'); refresh(); setInterval(function () { if (!document.hidden && !adm) refresh(); }, 60000); hash();
+  window.HUB = { render: render, refresh: refresh, openAdmin: openAdmin, live: LIVE, embed: EMBED };
+  if (EMBED) {
+    refresh();
+    (function ready() { var st = $('stage'); if (st && st.classList.contains('ready') && window.__d2) emit('VIEWER_READY'); else setTimeout(ready, 250); })();
+  } else { track('visit'); refresh(); setInterval(function () { if (!document.hidden && !adm) refresh(); }, 60000); hash(); }
 })();
