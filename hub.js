@@ -8,7 +8,8 @@
   var ST = { disponible: 'Disponible', reservada: 'Reservada', vendida: 'Vendida', bloqueada: 'No disponible' };
   // Embebido en la web de Greenville (?embed=greenville, o dentro de un iframe en GitHub Pages): los datos y los formularios
   // son de la web padre. El visor no guarda nada: recibe estados y precios por postMessage y avisa cuando piden consultar.
-  var EMBED = /[?&]embed=greenville\b/.test(location.search) || (window.parent !== window && /github\.io$/.test(location.hostname));
+  // ?web=1: embebido en otra página que no escucha mensajes -> funciona solo, con su propio formulario de consulta
+  var EMBED = !/[?&]web=1\b/.test(location.search) && (/[?&]embed=greenville\b/.test(location.search) || (window.parent !== window && /github\.io$/.test(location.hostname)));
   var $ = function (id) { return document.getElementById(id); };
   function h(tag, at, kids) {
     var e = document.createElement(tag); at = at || {};
