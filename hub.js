@@ -120,7 +120,7 @@
 .hub-st{flex:0 0 auto;font:700 12px var(--body);padding:6px 10px;border-radius:999px;background:#dff3e4;color:#17603a}\
 .hub-st.reservada{background:#fde9c8;color:#8a5200}.hub-st.vendida,.hub-st.bloqueada{background:#e6e6ea;color:#55555e}\
 .hub-count{font-size:12.5px;color:var(--pmut)}@media (max-width:760px){.hub-price{padding:7px 12px}.hub-price b{font-size:17px}}\
-.hub-ask{width:100%}.act.hub-cta{background:var(--lila);color:#fff;min-height:58px;font:700 17px var(--body);border-radius:14px}.act.hub-cta:hover{filter:brightness(1.12)}@media (max-width:760px){.act.hub-cta{min-height:54px;font-size:16px}}.hub-acts2{display:flex;gap:8px;width:100%}.hub-acts2 .act{flex:1 1 0;min-width:0}.hub-acts2 .act:disabled{opacity:.45;cursor:default}\
+.hub-ask{width:100%}.act.hub-cta{background:var(--lila);color:#fff;min-height:58px;font:700 17px var(--body);border-radius:14px}.act.hub-cta:hover{filter:brightness(1.12)}@media (max-width:760px){.act.hub-cta{min-height:54px;font-size:16px}}.hub-acts2{display:flex;gap:8px;width:100%}.hub-acts2 .act{flex:1 1 0;min-width:0;min-height:54px}.hub-acts2 .act:disabled{opacity:.45;cursor:default}\
 .u.hub-off{opacity:.55}.u.hub-off::after{display:block;font:600 9px var(--body);margin-top:1px;content:attr(data-st)}\
 .tag.hub-off{opacity:.8}.tag.hub-off::after{content:" · " attr(data-st);font-weight:500}\
 #hub-modal,#hub-admin{position:fixed;inset:0;z-index:40;font-family:var(--body);color:#1d1c24;color-scheme:light}\
@@ -164,7 +164,9 @@
   function refresh() { return S.load().then(function (d) { pub = d; paint(); }).catch(function () { }); }
   function track(t, u) { if (!S.isAdmin()) S.track(t, u); }
 
-  var cardEl, askEl, stampKey = '';
+  var cardEl, askEl, resEl, stampKey = '';
+  // ?reservas=1 (solo embebido): la página que lo embebe tiene login y se encarga de reservar; el visor solo avisa REQUEST_RESERVATION
+  var RES = EMBED && /[?&]reservas=1\b/.test(location.search);
   // ---------------------------------------------------------------- mensajes con la web padre (contrato v1)
   function payload(n) {
     n = +n; var a = (window.UNIT_AREAS || {})[n] || [0, 0, 0], pos = n % 100, d = window.__d2 && window.__d2.state;
@@ -191,8 +193,11 @@
     var acts = document.querySelector('#card .acts');
     // desde la web no se reserva: la única acción es consultar (las reservas las carga el equipo)
     if (EMBED) askEl = h('button', { type: 'button', class: 'act hub-ask', text: 'Consultar por esta unidad', onclick: function () { if (cur) emit('REQUEST_INQUIRY', { unit: payload(cur) }); } });
-    askEl.classList.add('hub-cta');
-    acts.parentNode.insertBefore(askEl, acts.nextSibling);
+    if (RES) {
+      resEl = h('button', { type: 'button', class: 'act hub-cta', text: 'Reservar unidad', onclick: function () { if (cur) emit('REQUEST_RESERVATION', { unit: payload(cur) }); } });
+      askEl.className = 'act alt'; askEl.textContent = 'Consultar';
+      acts.parentNode.insertBefore(h('div', { class: 'hub-acts2' }, [resEl, askEl]), acts.nextSibling);
+    } else { askEl.classList.add('hub-cta'); acts.parentNode.insertBefore(askEl, acts.nextSibling); }
   }
   function mark(el) { var u = pub.units[+el.textContent.trim().slice(0, 3)] || pub.units[+el.dataset.num]; var off = u && u.status !== 'disponible'; el.classList.toggle('hub-off', !!off); if (off) el.dataset.st = ST[u.status].toLowerCase(); else delete el.dataset.st; }
   function paint() {
@@ -203,7 +208,8 @@
     var u = pub.units[cur] || { status: 'disponible' }; cardEl.textContent = '';
     cardEl.appendChild(h('div', { class: 'hub-price' }, [h('div', {}, [h('small', { text: 'Precio' }), u.price ? h('b', { text: money(u.price) }) : h('b', { class: 'ask', text: 'Consultar precio' })]), h('span', { class: 'hub-st ' + u.status, text: ST[u.status] })]));
     if (u.count) cardEl.appendChild(h('div', { class: 'hub-count', text: u.count === 1 ? '1 persona consultó por esta unidad' : u.count + ' personas consultaron por esta unidad' }));
-    askEl.textContent = u.status === 'disponible' ? 'Consultar por esta unidad' : 'Consultar igual';
+    if (RES) { resEl.disabled = u.status !== 'disponible'; resEl.title = resEl.disabled ? ST[u.status] : ''; }
+    else askEl.textContent = u.status === 'disponible' ? 'Consultar por esta unidad' : 'Consultar igual';
   }
   function render(state) {
     if (EMBED) {
