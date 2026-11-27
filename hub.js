@@ -5,7 +5,10 @@
   'use strict';
   var CFG = window.HUB_CFG || {}, LIVE = !!(CFG.url && CFG.key);
   var UNITS = []; for (var f = 1; f <= 4; f++) for (var k = 1; k <= 13; k++) UNITS.push(f * 100 + k);
-  var ST = { disponible: 'Disponible', reservada: 'Reservada', vendida: 'Vendida', bloqueada: 'No disponible' };
+  var ST = { disponible: 'Disponible', reservada: 'Reservada', vendida: 'Vendida', bloqueada: 'Bloqueada' };
+  // acepta también las variantes que pueda mandar la página (bloqueado, blocked, reservado...)
+  var ALIAS = { available: 'disponible', reservado: 'reservada', reserved: 'reservada', vendido: 'vendida', sold: 'vendida', bloqueado: 'bloqueada', blocked: 'bloqueada', 'no disponible': 'bloqueada' };
+  function normSt(v) { v = String(v == null ? '' : v).trim().toLowerCase(); return ALIAS[v] || v; }
   // Embebido en la web de Greenville (?embed=greenville, o dentro de un iframe en GitHub Pages): los datos y los formularios
   // son de la web padre. El visor no guarda nada: recibe estados y precios por postMessage y avisa cuando piden consultar.
   // ?web=1: embebido en otra página que no escucha mensajes -> funciona solo, con su propio formulario de consulta
@@ -102,7 +105,7 @@
     return {
       needsSetup: function () { return false; },
       load: function () { var u = {}; UNITS.forEach(function (n) { u[n] = { price: pr[n] || null, status: st[n] || 'disponible', count: null }; }); return Promise.resolve({ units: u, settings: { showCount: false, whatsapp: '' } }); },
-      setStatuses: function (m) { st = {}; for (var k in m) if (ST[m[k]] && m[k] !== 'disponible') st[+k] = m[k]; },
+      setStatuses: function (m) { st = {}; for (var k in m) { var v = normSt(m[k]); if (ST[v] && v !== 'disponible') st[+k] = v; } },
       setPrices: function (m) { pr = {}; for (var k in m) { var v = +m[k]; if (v > 0) pr[+k] = v; } },
       inquire: function () { return Promise.resolve(); }, track: function () { return Promise.resolve(); },
       isAdmin: function () { return false; }, login: function () { return Promise.reject(new Error('No disponible.')); }, logout: function () { return Promise.resolve(); }
